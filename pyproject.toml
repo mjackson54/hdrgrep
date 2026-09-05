@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hdrgrep"
+version = "0.1.0"
+description = "Pull header values out of large streams of raw HTTP header blocks without loading the whole thing into memory."
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+authors = [{name = "mjackson54"}]
+
+[project.scripts]
+hdrgrep = "hdrgrep.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["hdrgrep*"]
