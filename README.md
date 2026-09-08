@@ -98,6 +98,12 @@ pip install -e .
 hdrgrep -H content-type dump.txt
 ```
 
+Run the tests with:
+
+```sh
+python -m unittest discover -s tests
+```
+
 ## license
 
 MIT, see LICENSE.
