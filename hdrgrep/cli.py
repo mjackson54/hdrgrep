@@ -66,16 +66,26 @@ def iter_blocks(lines):
         yield start_line, headers
 
 
+def find_headers(headers, names):
+    """Return headers matching any of names, case-insensitively.
+
+    Matches are returned in the order they appeared in the block, not
+    grouped by which requested name they matched, so output with multiple
+    -H flags reads the same as the original block.
+    """
+    lowered = {name.lower() for name in names}
+    return [(n, v) for n, v in headers if n.lower() in lowered]
+
+
 def find_header(headers, name):
     """Return the values of all headers matching name, case-insensitively."""
-    lowered = name.lower()
-    return [(n, v) for n, v in headers if n.lower() == lowered]
+    return find_headers(headers, (name,))
 
 
-def run(lines, header_name, out, count_only, with_name):
+def run(lines, header_names, out, count_only, with_name):
     matches = 0
     for _start_line, headers in iter_blocks(lines):
-        found = find_header(headers, header_name)
+        found = find_headers(headers, header_names)
         if not found:
             continue
         matches += 1
@@ -108,15 +118,19 @@ def build_parser():
     parser.add_argument(
         "-H",
         "--header",
+        action="append",
         required=True,
         metavar="NAME",
-        help="header name to extract, e.g. Content-Type (matched case-insensitively)",
+        help=(
+            "header name to extract, e.g. Content-Type (matched case-insensitively). "
+            "Repeat to extract multiple headers in one pass."
+        ),
     )
     parser.add_argument(
         "-c",
         "--count",
         action="store_true",
-        help="print the number of blocks containing the header, instead of its values",
+        help="print the number of blocks containing any requested header, instead of its values",
     )
     parser.add_argument(
         "--with-name",

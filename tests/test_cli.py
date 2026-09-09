@@ -1,7 +1,7 @@
 import io
 import unittest
 
-from hdrgrep.cli import find_header, iter_blocks, run
+from hdrgrep.cli import find_header, find_headers, iter_blocks, run
 
 
 def block_lines(*lines):
@@ -164,6 +164,23 @@ class FindHeaderTests(unittest.TestCase):
         self.assertEqual(find_header(headers, "X-Missing"), [])
 
 
+class FindHeadersTests(unittest.TestCase):
+    def test_matches_any_of_several_names_in_block_order(self):
+        headers = [
+            ("Set-Cookie", "a=1"),
+            ("Content-Type", "text/html"),
+            ("X-Other", "ignored"),
+        ]
+        self.assertEqual(
+            find_headers(headers, ["content-type", "set-cookie"]),
+            [("Set-Cookie", "a=1"), ("Content-Type", "text/html")],
+        )
+
+    def test_no_names_matches_nothing(self):
+        headers = [("Content-Type", "text/html")]
+        self.assertEqual(find_headers(headers, []), [])
+
+
 class RunTests(unittest.TestCase):
     def test_prints_matching_values(self):
         lines = block_lines(
@@ -175,13 +192,13 @@ class RunTests(unittest.TestCase):
             "",
         )
         out = io.StringIO()
-        run(lines, "content-type", out, count_only=False, with_name=False)
+        run(lines, ["content-type"], out, count_only=False, with_name=False)
         self.assertEqual(out.getvalue(), "text/html\napplication/json\n")
 
     def test_with_name_prefixes_original_name(self):
         lines = block_lines("Content-Type: text/html", "")
         out = io.StringIO()
-        run(lines, "content-type", out, count_only=False, with_name=True)
+        run(lines, ["content-type"], out, count_only=False, with_name=True)
         self.assertEqual(out.getvalue(), "Content-Type: text/html\n")
 
     def test_count_only_prints_block_count_not_values(self):
@@ -194,14 +211,53 @@ class RunTests(unittest.TestCase):
             "",
         )
         out = io.StringIO()
-        run(lines, "content-type", out, count_only=True, with_name=False)
+        run(lines, ["content-type"], out, count_only=True, with_name=False)
         self.assertEqual(out.getvalue(), "2\n")
 
     def test_no_matches_prints_nothing(self):
         lines = block_lines("Content-Type: text/html", "")
         out = io.StringIO()
-        run(lines, "x-missing", out, count_only=False, with_name=False)
+        run(lines, ["x-missing"], out, count_only=False, with_name=False)
         self.assertEqual(out.getvalue(), "")
+
+    def test_multiple_header_names_match_in_block_order(self):
+        lines = block_lines(
+            "HTTP/1.1 200 OK",
+            "Set-Cookie: a=1",
+            "Content-Type: text/html",
+            "Cache-Control: no-store",
+            "",
+        )
+        out = io.StringIO()
+        run(
+            lines,
+            ["content-type", "set-cookie"],
+            out,
+            count_only=False,
+            with_name=True,
+        )
+        self.assertEqual(
+            out.getvalue(), "Set-Cookie: a=1\nContent-Type: text/html\n"
+        )
+
+    def test_multiple_header_names_count_blocks_matching_any(self):
+        lines = block_lines(
+            "Content-Type: text/html",
+            "",
+            "Set-Cookie: a=1",
+            "",
+            "X-Other: yes",
+            "",
+        )
+        out = io.StringIO()
+        run(
+            lines,
+            ["content-type", "set-cookie"],
+            out,
+            count_only=True,
+            with_name=False,
+        )
+        self.assertEqual(out.getvalue(), "2\n")
 
 
 if __name__ == "__main__":

@@ -56,7 +56,22 @@ cat dump.txt | hdrgrep -H content-type
 Header names are matched case-insensitively, since that's how HTTP treats
 them.
 
-Count how many blocks had the header at all, instead of printing values:
+Pass `-H` more than once to pull out several headers in the same pass over
+the file. Matches are printed in the order they appeared in each block, not
+grouped by which `-H` they matched:
+
+```sh
+hdrgrep -H content-type -H set-cookie --with-name dump.txt
+```
+
+```
+Content-Type: text/html; charset=utf-8
+Set-Cookie: session=abc123; Path=/
+Content-Type: application/json
+```
+
+Count how many blocks had the header at all, instead of printing values (with
+multiple `-H` flags, this counts blocks matching any of them):
 
 ```sh
 hdrgrep -H set-cookie --count dump.txt
