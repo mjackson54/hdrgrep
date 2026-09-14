@@ -53,8 +53,16 @@ Read from stdin instead of a file:
 cat dump.txt | hdrgrep -H content-type
 ```
 
-Header names are matched case-insensitively, since that's how HTTP treats
-them.
+Header names are matched case-insensitively by default, since that's how
+HTTP treats them. Pass `--exact-case` to require an exact match instead, if
+you're looking for a specific spelling a server uses:
+
+```sh
+hdrgrep -H content-type --exact-case dump.txt
+```
+
+This would skip a `Content-Type` header and only match one written exactly
+as `content-type`.
 
 Pass `-H` more than once to pull out several headers in the same pass over
 the file. Matches are printed in the order they appeared in each block, not

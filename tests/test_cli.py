@@ -163,6 +163,19 @@ class FindHeaderTests(unittest.TestCase):
         headers = [("Content-Type", "text/html")]
         self.assertEqual(find_header(headers, "X-Missing"), [])
 
+    def test_exact_case_rejects_different_casing(self):
+        headers = [("Content-Type", "text/html")]
+        self.assertEqual(
+            find_header(headers, "content-type", exact_case=True), []
+        )
+
+    def test_exact_case_matches_identical_casing(self):
+        headers = [("Content-Type", "text/html")]
+        self.assertEqual(
+            find_header(headers, "Content-Type", exact_case=True),
+            [("Content-Type", "text/html")],
+        )
+
 
 class FindHeadersTests(unittest.TestCase):
     def test_matches_any_of_several_names_in_block_order(self):
@@ -179,6 +192,16 @@ class FindHeadersTests(unittest.TestCase):
     def test_no_names_matches_nothing(self):
         headers = [("Content-Type", "text/html")]
         self.assertEqual(find_headers(headers, []), [])
+
+    def test_exact_case_matches_only_requested_spelling(self):
+        headers = [
+            ("content-type", "text/html"),
+            ("Content-Type", "application/json"),
+        ]
+        self.assertEqual(
+            find_headers(headers, ["Content-Type"], exact_case=True),
+            [("Content-Type", "application/json")],
+        )
 
 
 class RunTests(unittest.TestCase):
@@ -258,6 +281,24 @@ class RunTests(unittest.TestCase):
             with_name=False,
         )
         self.assertEqual(out.getvalue(), "2\n")
+
+    def test_exact_case_excludes_differently_cased_header(self):
+        lines = block_lines(
+            "content-type: text/html",
+            "",
+            "Content-Type: application/json",
+            "",
+        )
+        out = io.StringIO()
+        run(
+            lines,
+            ["Content-Type"],
+            out,
+            count_only=False,
+            with_name=False,
+            exact_case=True,
+        )
+        self.assertEqual(out.getvalue(), "application/json\n")
 
 
 if __name__ == "__main__":

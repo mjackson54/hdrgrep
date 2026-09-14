@@ -66,26 +66,31 @@ def iter_blocks(lines):
         yield start_line, headers
 
 
-def find_headers(headers, names):
-    """Return headers matching any of names, case-insensitively.
+def find_headers(headers, names, exact_case=False):
+    """Return headers matching any of names.
 
+    Matching is case-insensitive by default, since that's how HTTP treats
+    header names; pass exact_case=True to require an exact match instead.
     Matches are returned in the order they appeared in the block, not
     grouped by which requested name they matched, so output with multiple
     -H flags reads the same as the original block.
     """
+    if exact_case:
+        wanted = set(names)
+        return [(n, v) for n, v in headers if n in wanted]
     lowered = {name.lower() for name in names}
     return [(n, v) for n, v in headers if n.lower() in lowered]
 
 
-def find_header(headers, name):
-    """Return the values of all headers matching name, case-insensitively."""
-    return find_headers(headers, (name,))
+def find_header(headers, name, exact_case=False):
+    """Return the values of all headers matching name."""
+    return find_headers(headers, (name,), exact_case=exact_case)
 
 
-def run(lines, header_names, out, count_only, with_name):
+def run(lines, header_names, out, count_only, with_name, exact_case=False):
     matches = 0
     for _start_line, headers in iter_blocks(lines):
-        found = find_headers(headers, header_names)
+        found = find_headers(headers, header_names, exact_case=exact_case)
         if not found:
             continue
         matches += 1
@@ -137,6 +142,14 @@ def build_parser():
         action="store_true",
         help="prefix each printed value with the header's original name",
     )
+    parser.add_argument(
+        "--exact-case",
+        action="store_true",
+        help=(
+            "match header names exactly as given instead of case-insensitively "
+            "(e.g. -H content-type won't match a 'Content-Type' header)"
+        ),
+    )
     return parser
 
 
@@ -145,12 +158,26 @@ def main(argv=None):
     args = parser.parse_args(argv)
 
     if args.file == "-":
-        run(sys.stdin, args.header, sys.stdout, args.count, args.with_name)
+        run(
+            sys.stdin,
+            args.header,
+            sys.stdout,
+            args.count,
+            args.with_name,
+            args.exact_case,
+        )
         return 0
 
     try:
         with open(args.file, "r", encoding="utf-8", errors="replace") as fh:
-            run(fh, args.header, sys.stdout, args.count, args.with_name)
+            run(
+                fh,
+                args.header,
+                sys.stdout,
+                args.count,
+                args.with_name,
+                args.exact_case,
+            )
     except OSError as exc:
         print(f"hdrgrep: {exc.filename}: {exc.strerror}", file=sys.stderr)
         return 1
