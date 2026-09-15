@@ -96,6 +96,28 @@ Content-Type: text/html; charset=utf-8
 Content-Type: application/json
 ```
 
+Print each match as a JSON object instead, one per line, for piping into
+`jq` or another tool:
+
+```sh
+hdrgrep -H content-type --json dump.txt
+```
+
+```
+{"name": "Content-Type", "value": "text/html; charset=utf-8"}
+{"name": "Content-Type", "value": "application/json"}
+```
+
+With `--count`, `--json` prints a single `{"count": N}` line instead:
+
+```sh
+hdrgrep -H set-cookie --count --json dump.txt
+```
+
+```
+{"count": 2}
+```
+
 ## input format
 
 Each block is a request line or status line (optional), followed by

@@ -12,6 +12,7 @@ headers of the current block in memory.
 """
 
 import argparse
+import json
 import re
 import sys
 
@@ -87,7 +88,7 @@ def find_header(headers, name, exact_case=False):
     return find_headers(headers, (name,), exact_case=exact_case)
 
 
-def run(lines, header_names, out, count_only, with_name, exact_case=False):
+def run(lines, header_names, out, count_only, with_name, exact_case=False, json_output=False):
     matches = 0
     for _start_line, headers in iter_blocks(lines):
         found = find_headers(headers, header_names, exact_case=exact_case)
@@ -97,13 +98,18 @@ def run(lines, header_names, out, count_only, with_name, exact_case=False):
         if count_only:
             continue
         for name, value in found:
-            if with_name:
+            if json_output:
+                out.write(json.dumps({"name": name, "value": value}) + "\n")
+            elif with_name:
                 out.write(f"{name}: {value}\n")
             else:
                 out.write(f"{value}\n")
 
     if count_only:
-        out.write(f"{matches}\n")
+        if json_output:
+            out.write(json.dumps({"count": matches}) + "\n")
+        else:
+            out.write(f"{matches}\n")
 
 
 def build_parser():
@@ -150,6 +156,15 @@ def build_parser():
             "(e.g. -H content-type won't match a 'Content-Type' header)"
         ),
     )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help=(
+            "print one JSON object per line instead of plain text "
+            '(e.g. {"name": "Content-Type", "value": "text/html"}), '
+            "or a single {\"count\": N} line with --count"
+        ),
+    )
     return parser
 
 
@@ -165,6 +180,7 @@ def main(argv=None):
             args.count,
             args.with_name,
             args.exact_case,
+            args.json,
         )
         return 0
 
@@ -177,6 +193,7 @@ def main(argv=None):
                 args.count,
                 args.with_name,
                 args.exact_case,
+                args.json,
             )
     except OSError as exc:
         print(f"hdrgrep: {exc.filename}: {exc.strerror}", file=sys.stderr)

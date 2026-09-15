@@ -1,4 +1,5 @@
 import io
+import json
 import unittest
 
 from hdrgrep.cli import find_header, find_headers, iter_blocks, run
@@ -299,6 +300,51 @@ class RunTests(unittest.TestCase):
             exact_case=True,
         )
         self.assertEqual(out.getvalue(), "application/json\n")
+
+    def test_json_output_prints_one_object_per_match(self):
+        lines = block_lines(
+            "HTTP/1.1 200 OK",
+            "Content-Type: text/html",
+            "",
+            "HTTP/1.1 200 OK",
+            "Content-Type: application/json",
+            "",
+        )
+        out = io.StringIO()
+        run(
+            lines,
+            ["content-type"],
+            out,
+            count_only=False,
+            with_name=False,
+            json_output=True,
+        )
+        records = [json.loads(line) for line in out.getvalue().splitlines()]
+        self.assertEqual(
+            records,
+            [
+                {"name": "Content-Type", "value": "text/html"},
+                {"name": "Content-Type", "value": "application/json"},
+            ],
+        )
+
+    def test_json_output_with_count(self):
+        lines = block_lines(
+            "Content-Type: text/html",
+            "",
+            "X-Other: yes",
+            "",
+        )
+        out = io.StringIO()
+        run(
+            lines,
+            ["content-type"],
+            out,
+            count_only=True,
+            with_name=False,
+            json_output=True,
+        )
+        self.assertEqual(json.loads(out.getvalue()), {"count": 1})
 
 
 if __name__ == "__main__":
