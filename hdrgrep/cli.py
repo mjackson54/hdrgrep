@@ -9,6 +9,11 @@ in a load test or a scripted crawl.
 The whole point of this tool is that such a file can be gigabytes long, so
 we never read it in one go. We walk it line by line and only ever hold the
 headers of the current block in memory.
+
+A block can also carry a message body (Content-Length or chunked
+Transfer-Encoding), which curl -D - output never has but a raw traffic
+capture might. We skip those bytes rather than read them, so a body can't
+be mistaken for the next block's headers.
 """
 
 import argparse
@@ -30,16 +35,24 @@ def iter_blocks(lines):
     start_line is the request/status line if one was present, else None.
     Only the current block's data is ever held onto, so this stays cheap
     no matter how many blocks the input contains.
+
+    If a block declares a body via Content-Length or a chunked
+    Transfer-Encoding, that body is consumed and discarded before looking
+    for the next block, so it can't be mistaken for header lines or a
+    stray start line. This is a real HTTP concept, not something curl -D -
+    output has, but it lets the same reader handle raw traffic dumps too.
     """
+    it = iter(lines)
     start_line = None
     headers = []
     in_block = False
 
-    for raw_line in lines:
+    for raw_line in it:
         line = raw_line.rstrip("\r\n")
 
         if line == "":
             if in_block:
+                _skip_body(it, headers)
                 yield start_line, headers
             start_line = None
             headers = []
@@ -65,6 +78,69 @@ def iter_blocks(lines):
 
     if in_block:
         yield start_line, headers
+
+
+def _header_value(headers, name):
+    """Return the first value for name, matched case-insensitively, or None.
+
+    Body framing (Content-Length, Transfer-Encoding) is always looked up
+    case-insensitively regardless of --exact-case, since that flag is about
+    what the user asked to extract, not how HTTP itself names things.
+    """
+    lowered = name.lower()
+    for header_name, value in headers:
+        if header_name.lower() == lowered:
+            return value
+    return None
+
+
+def _skip_bytes(lines_iter, length):
+    """Consume whole lines from lines_iter until roughly length bytes are gone.
+
+    Body content isn't necessarily line-shaped, so this can overshoot into
+    the next line if a body doesn't end on a line boundary. There's no way
+    to do better while reading text line by line instead of raw bytes.
+    """
+    if length <= 0:
+        return
+    remaining = length
+    for raw_line in lines_iter:
+        remaining -= len(raw_line.encode("utf-8", "surrogateescape"))
+        if remaining <= 0:
+            return
+
+
+def _skip_chunked_body(lines_iter):
+    """Consume a chunked-encoding body: size lines, chunk data, then trailers."""
+    for raw_line in lines_iter:
+        size_text = raw_line.rstrip("\r\n").split(";", 1)[0].strip()
+        try:
+            size = int(size_text, 16)
+        except ValueError:
+            return
+        if size == 0:
+            for trailer_line in lines_iter:
+                if trailer_line.rstrip("\r\n") == "":
+                    return
+            return
+        _skip_bytes(lines_iter, size)
+
+
+def _skip_body(lines_iter, headers):
+    """Skip the message body that follows a block's headers, if any is declared."""
+    transfer_encoding = _header_value(headers, "Transfer-Encoding")
+    if transfer_encoding and "chunked" in transfer_encoding.lower():
+        _skip_chunked_body(lines_iter)
+        return
+
+    content_length = _header_value(headers, "Content-Length")
+    if content_length is None:
+        return
+    try:
+        length = int(content_length.strip())
+    except ValueError:
+        return
+    _skip_bytes(lines_iter, length)
 
 
 def find_headers(headers, names, exact_case=False):

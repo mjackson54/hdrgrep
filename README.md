@@ -124,9 +124,16 @@ Each block is a request line or status line (optional), followed by
 `Name: value` header lines, followed by a blank line. This is exactly what
 `curl -D -` writes per request, so the common way to build an input file is
 appending its output across many requests. Obsolete line folding (a header
-value continued on an indented line) is supported; chunked or
-otherwise-encoded message bodies are not read or skipped, so don't point
-this at raw traffic dumps that still have bodies in them.
+value continued on an indented line) is supported.
+
+If a block's headers declare a body via `Content-Length` or a chunked
+`Transfer-Encoding`, that body is skipped rather than misread as the next
+block's headers. This is aimed at raw traffic captures rather than curl
+output, and skipping is done a line at a time rather than by exact byte
+offset, so it can occasionally overshoot into the line right after a body
+that doesn't end cleanly on a line boundary. Any other `Transfer-Encoding`
+(gzip, compress, and so on without `chunked`) has no declared length, so
+its body isn't skipped and will confuse the block parser.
 
 ## running it
 

@@ -142,6 +142,71 @@ class IterBlocksTests(unittest.TestCase):
         blocks = list(iter_blocks(lines))
         self.assertEqual(len(blocks), 1)
 
+    def test_content_length_body_is_skipped_before_next_block(self):
+        lines = block_lines(
+            "HTTP/1.1 200 OK",
+            "Content-Type: text/plain",
+            "Content-Length: 11",
+            "",
+            "hello world",
+            "HTTP/1.1 200 OK",
+            "Content-Type: application/json",
+            "",
+        )
+        blocks = list(iter_blocks(lines))
+        self.assertEqual(len(blocks), 2)
+        self.assertEqual(blocks[1][0], "HTTP/1.1 200 OK")
+        self.assertEqual(blocks[1][1], [("Content-Type", "application/json")])
+
+    def test_zero_content_length_skips_nothing(self):
+        lines = block_lines(
+            "HTTP/1.1 204 No Content",
+            "Content-Length: 0",
+            "",
+            "HTTP/1.1 200 OK",
+            "Content-Type: text/plain",
+            "",
+        )
+        blocks = list(iter_blocks(lines))
+        self.assertEqual(len(blocks), 2)
+        self.assertEqual(blocks[1][0], "HTTP/1.1 200 OK")
+
+    def test_chunked_body_is_skipped_before_next_block(self):
+        lines = block_lines(
+            "HTTP/1.1 200 OK",
+            "Transfer-Encoding: chunked",
+            "",
+            "5",
+            "hello",
+            "0",
+            "",
+            "HTTP/1.1 200 OK",
+            "Content-Type: text/plain",
+            "",
+        )
+        blocks = list(iter_blocks(lines))
+        self.assertEqual(len(blocks), 2)
+        self.assertEqual(blocks[1][0], "HTTP/1.1 200 OK")
+        self.assertEqual(blocks[1][1], [("Content-Type", "text/plain")])
+
+    def test_transfer_encoding_takes_precedence_over_content_length(self):
+        # A response shouldn't send both, but if it does, chunked framing
+        # is what actually describes the bytes on the wire.
+        lines = block_lines(
+            "HTTP/1.1 200 OK",
+            "Transfer-Encoding: chunked",
+            "Content-Length: 999",
+            "",
+            "0",
+            "",
+            "HTTP/1.1 200 OK",
+            "Content-Type: text/plain",
+            "",
+        )
+        blocks = list(iter_blocks(lines))
+        self.assertEqual(len(blocks), 2)
+        self.assertEqual(blocks[1][0], "HTTP/1.1 200 OK")
+
 
 class FindHeaderTests(unittest.TestCase):
     def test_matches_case_insensitively(self):
